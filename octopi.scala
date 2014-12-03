@@ -4,7 +4,7 @@ import org.kiama.attribution.Attribution._
 import org.kiama.attribution.Attribution
 import org.kiama.attribution.Attributable
 import java.io._
-import scala.collection.immutable.Seq
+import scala.collection.immutable.List
 
 object OctoTree {
 	import org.kiama.util.TreeNode
@@ -14,7 +14,7 @@ object OctoTree {
 
 	sealed abstract class Exp extends OctoTree
 
-	case class Tensor(name: String, ind: Seq[String]) extends Exp
+	case class Tensor(name: String, ind: List[String]) extends Exp
 
 	case class Mul(lhs: Exp, rhs: Exp) extends Exp
 
@@ -30,9 +30,9 @@ object OctoTree {
 	// Later we will expand on this, at the very least a list of statements
 	sealed abstract class Program extends OctoTree
 
-	case class Sum(decl: Seq[Tensor], lhs: Tensor, ind: Seq[String], rhs: Exp) extends Program
+	case class Sum(decl: List[Tensor], lhs: Tensor, ind: List[String], rhs: Exp) extends Program
 
-	case class Code(decl: Seq[Tensor], stmt: Stmt) extends Program
+	case class Code(decl: List[Tensor], ind: List[String], stmt: Stmt) extends Program
 
 	// Each index is actually the size of that dimension
 	def containerSizes(t: Tensor) : (String, List[String]) = {
@@ -42,6 +42,13 @@ object OctoTree {
 					(i, xs) => (xs.head + "*" + i)::xs))
 		}
 	}
+
+	// scanl :: (a -> b -> a) -> a -> [b] -> [a]
+	/*
+	def scanl[T](f: (T,T) => T, x: T, xs: List[T]): List[T] = {
+		
+	}
+	*/
 
 }
 
@@ -88,17 +95,18 @@ object CPrinter extends PrettyPrinter {
 	def show(t : OctoTree) : Doc = {
 
 		t match {
-			case Tensor(name,ind) => name <> "[" <> flattenAccess(ind, "") <> "]"
+			case Tensor(name,ind) => name <> "[" <> flattenAccess(ind) <> "]"
 			case Mul(lhs, rhs) => show(lhs) <> "*" <> show(rhs)
 			case Sum(decl, lhs, ind, rhs) => {
 				"Declarations: " <> sep(decl.map(show)) <+> show(lhs) <> "= Sum(" <+>  ssep(ind map text, "][") <> "," <> show(rhs) <> ")"
 			}
 
-			case Assign(lhs, rhs) => show(lhs) <> "=" <> show(rhs)
+			case Assign(lhs, rhs) => show(lhs) <> "=" <> show(rhs) <> ";"
 
 			case Loop(body, ivar, bounds) => "for (" <> bounds <> ") {" <@> show(body)  <@> "}"
 
-			case Code(decl: Seq[Tensor], stmt: Stmt) => "void nek(double *" + functionArgs(decl) + ") {" <@> show(stmt) <@> "}"
+			case Code(decl: List[Tensor], ind: List[String], stmt: Stmt) => "void nek(double *" + 
+				functionArgs(decl) + ", int " + ind.mkString("_max, int ") +  "_max) {" <@> show(stmt) <@> "}"
 
 			// case _ => throw new RuntimeException("unrecognized case in PrettyPrint")
 			/*
@@ -110,14 +118,30 @@ object CPrinter extends PrettyPrinter {
 		}
 	}
 
-	def indexLoop(i:String) = "for (int "+i+"=0; " + i + "<10; ++" + i + ") {"
+	def functionArgs(vars: List[Tensor]) = vars.map(_.name).mkString(", double* ")
 
-	def functionArgs(vars: Seq[Tensor]) = vars.map(_.name).mkString(", double* ")
+	// The problem with this function is that it doesn't do quite the right thing
+	// the problem seems to be an off-by-one error, with an extra "+ " at the end
 
-	def flattenAccess(ind: Seq[String], stride: String) : String = ind match {
-		case Seq() => return ""
-		case x :: xs => x + stride + " + " + flattenAccess(xs, stride + "*" + x + "_max")
+
+	// The first transformation is to take a,b,c,d, and turn it into
+	// (), *a_max, *b_max*a_max, *c_max*b_max*a_max, *d_max*c_max*b_max*a_max
+
+	def stride_bound(ind: List[String]) : List[String] = 
+		ind.foldLeft(List(""))( (prevList, cur) => ((prevList.head + "*" + cur + "_max")::prevList) )
+
+	def plusify(ind: List[String]): String = ind match {
+		case List() => ""
+		case x :: xs => xs.foldLeft(x)(_ + " + " + _)
 	}
+
+	// flattenAccess gets the stride numbers from stride_bound
+	// Then the final maneuver is an off-by-one zip and a fold over + 
+	// zip(a b c d , amax, amax*bmax....)
+	// This whole piece seems unbearably ugly but I'm not quite sure how to improve it at the moment
+	def flattenAccess(ind: List[String]) : String = 
+		plusify(ind.zip( stride_bound(ind).reverse).map( { case (u,v) => u+v } ))
+		
 }
 
 /*
@@ -144,14 +168,14 @@ trait Evaluator {
 	def express(s: Sum) : Code = {
 		s match {
 			case Sum(decl, lhs, ind, rhs) => 
-				Code(decl, lowerLoops(ind ++ lhs.ind, lhs, rhs))
+				Code(decl, ind ++ lhs.ind, lowerLoops(ind ++ lhs.ind, lhs, rhs))
 			// case _ => throw new RuntimeException("unrecognized case in express")
 		}
 	}
 
-	def lowerLoops(indexList : Seq[String], lhs: Tensor, rhs: Exp) : Stmt = {
+	def lowerLoops(indexList : List[String], lhs: Tensor, rhs: Exp) : Stmt = {
 		indexList match {
-			case Seq() => Assign(lhs, rhs)
+			case List() => Assign(lhs, rhs)
 			case x :: xs => Loop(lowerLoops(xs, lhs, rhs), x, "int " + x + " = 0; " + x + " < 10; ++" + x)
 		}
 	}
