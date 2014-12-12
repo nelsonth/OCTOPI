@@ -22,6 +22,7 @@ object OctoTree {
 	// Program object for parser
 	case class Program(lhs: Tensor, rhs: List[Tensor])
 
+	// prints tensors in the string format Axel needs
 	def var_decl(t : Tensor) : String = t match {
 		case Tensor(n, i) => n + ":(" + i.map(_.toUpperCase).mkString(",") + ")"
 	}
@@ -70,7 +71,6 @@ object OctoTree {
 
 			var results = List[Exp]()
 			for (i <- (0 to post.size-1); a <- pre++post.take(i)) {
-				// println("i = " +i)
 				val next = Mul(Tensor("temp"+tempV.toString, 
 					ispace(a).union(ispace(post(i)))), a, post(i))
 				results = results ++ implement(tempV+1,lhs, 
@@ -98,7 +98,7 @@ trait SyntaxAnalyser extends JavaTokenParsers {
 			{case lhs ~ "+=" ~ rhs => Program(lhs, rhs)}
 }
 
-object CPrinter extends PrettyPrinter {
+object MPrinter extends PrettyPrinter {
 	import OctoTree._
 
 	def pretty(t : Exp) : String = {
@@ -129,6 +129,104 @@ object CPrinter extends PrettyPrinter {
 		case Sum(res, ind, rhs) => flatten(Sum(res, ind, rhs))._2
 	}
 }
+
+object Flat extends PrettyPrinter {
+	import OctoTree._
+
+	def pretty(t : Exp) : String = {
+		super.pretty(show(t))
+	}
+
+	def maybeAssign(e : Exp, curexpr : Doc) : (Doc,Doc)  = e match {
+		case Tensor(n,i) => (curexpr, empty)
+		case Mul(o,l,r) => (curexpr, empty)
+		case Sum(res, ind, rhs) => (show(res), show(res) <+> "=" <+> curexpr <> line)
+	}
+
+	// returns the current expression document and the statement document
+	def flatten(e : Exp) : (Doc, Doc) = e match {
+		case Tensor(name,ind) => (show(Tensor(name,ind)),empty)
+		case Sum(res, ind, rhs) =>  {
+			val sub = flatten(rhs)
+			("Sum(" <> ind <> "," <+> sub._1 <> ")", sub._2)
+		}
+		case Mul(res, lhs, rhs) => {
+			//println("entering mul")
+			//println(lhs)
+			//println(rhs)
+			val subl = flatten(lhs)
+			val subr = flatten(rhs)
+			val maybeL = maybeAssign(lhs, subl._1)
+			val maybeR = maybeAssign(rhs, subr._1)
+			//println(super.pretty(maybeL._2))
+			//println(super.pretty(maybeR._2))
+			("(" <> maybeL._1 <> "*" <> maybeR._1 <> ")", subl._2 <> subr._2 <> maybeL._2 <> maybeR._2)
+		}
+	}
+
+
+	def show(t : Exp) : Doc = t match {
+		case Tensor(name,ind) => name <> ":(" <> ssep(ind.toList.map(text),",") <> ")"
+		// should be res = 
+		case Mul(res, lhs, rhs) => {
+			val meh = flatten(Mul(res, lhs, rhs))
+			meh._2 <> show(res) <+> "=" <+> meh._1
+		}
+		case Sum(res, ind, rhs) =>  {
+			val meh = flatten(Sum(res, ind, rhs))
+			meh._2 <> show(res) <+> "=" <+> meh._1
+		}
+	}
+
+
+}
+
+object Prefix extends PrettyPrinter {
+	import OctoTree._
+
+	def pretty(t: Exp) : String = super.pretty(show(t))
+
+	def show(e : Exp) : Doc = e match {
+		case Tensor(name, ind) => text(name)
+		case Mul(res, lhs, rhs) => "*" <+> show(lhs) <+> show(rhs)
+		case Sum(res, ind, rhs) => "+" <> text(ind) <+> show(rhs)
+	}
+}
+
+object Explicit extends PrettyPrinter {
+	import OctoTree._
+
+	def pretty(t: Exp) : String = super.pretty(show(t))
+
+	def show(e : Exp) : Doc = e match {
+		case Tensor(name,ind) => name <> "[" <> sep(ind.toList.map(text)) <> "]"
+		case Mul(res, lhs, rhs) => "Mul(" <> show(res) <> "," <+> show(lhs) <+> "," <+> show(rhs) <> ")"
+		case Sum(res, ind, rhs) => "Sum(" <> show(res) <> "," <+> text(ind) <+> "," <+> show(rhs) <> ")"
+	}
+}
+
+object GraphViz extends PrettyPrinter {
+	import OctoTree._
+
+	def pretty(t: Exp) : String = super.pretty(show(t))
+
+	def tns(t : Tensor) : Doc = t match {
+		case Tensor(name,ind) => name <> "[" <> sep(ind.toList.map(text)) <> "]"
+	}
+
+	def show(e : Exp) : Doc = e match {
+		case Tensor(name,ind) => name <> "[label = \"" <> tns(Tensor(name,ind)) <> "\"];" <> line
+		case Mul(res, lhs, rhs) => res.name <> "[label = \"" <> tns(res) <> "\"];" <@>
+			res.name <+> "->" <+> lval(lhs).name <> "[color=\"black\"];" <@>
+			res.name <+> "->" <+> lval(rhs).name <> "[color=\"black\"];" <@>
+			show(lhs) <> show(rhs)
+
+		case Sum(res, ind, rhs) => res.name <> "[label = \"" <> tns(res) <> "\"];" <@>
+			res.name <+> "->" <+> lval(rhs).name <> "[color=\"black\", label=" + ind + "];" <@>
+			show(rhs)
+	}
+}
+
 
 /*
 trait Evaluator {
@@ -201,7 +299,7 @@ object OCTOPI extends SyntaxAnalyser {
 
 		parser_result match {
 			case Success(program,i) => {
-				println(program.rhs)
+				// println(program.rhs)
 				val options = implement(0,program.lhs.ind, List[Exp](), program.rhs)
 				for (o <- options.zip(0 to options.size)) {
 					val output = o._1
@@ -210,9 +308,14 @@ object OCTOPI extends SyntaxAnalyser {
 						case Mul(res, lhs, rhs) => Mul(program.lhs, lhs, rhs)
 						case Sum(res, siv, rhs) => Sum(program.lhs, siv, rhs)
 					}
-					// println(renamed)
+
 					val indexSet:Set[String] = (program.lhs.ind /: program.rhs)({ case (vals, t) => vals.union(t.ind)})
 					val i = o._2
+					
+					// Shorthand version
+					// println(i + ": " + Prefix.pretty(renamed))
+					// println(i + ": " + Explicit.pretty(renamed))
+
 					val vars = tensor_temps(renamed)
 					val z = new File(dir_name + base_name + "_" + i + ".m")
 					val wr = new PrintWriter(dir_name + base_name + "_" + i + ".m")
@@ -227,10 +330,17 @@ object OCTOPI extends SyntaxAnalyser {
 						wr.println("\t" + var_decl(t))
 					}
 					wr.println("operations:")
-					wr.println(CPrinter.pretty(renamed))
+					wr.println(Flat.pretty(renamed))
 					wr.close()
+
+					// dot file
+					val gdot = new File(dir_name + base_name + "_" + i + ".dot")
+					val gw = new PrintWriter(dir_name + base_name + "_" + i + ".dot")
+					gw.println("digraph G {")
+					gw.println(GraphViz.pretty(renamed))
+					gw.println("}")
+					gw.close()
 				}
-				//println(CPrinter.pretty(implement(program.lhs.ind, program.rhs)))
 			}
 			case Failure(m,i) => println(m)
 			case Error(m,i) => println(m)
