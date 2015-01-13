@@ -139,16 +139,13 @@ object Flat extends PrettyPrinter {
     def maybeAssign(e : Exp, curexpr : Doc) : (Doc,Doc)  = e match {
         case Tensor(n,i) => (curexpr, empty)
         case Mul(o,l,r) => (curexpr, empty)
-        case Sum(res, ind, rhs) => (show(res), "\t" <> show(res) <+> "=" <+> curexpr <> line)
+        case Sum(res, ind, rhs) => (show(res), "\t" <> show(res) <+> "+=" <+> curexpr <> line)
     }
 
     // returns the current expression document and the statement document
     def flatten(e : Exp) : (Doc, Doc) = e match {
         case Tensor(name,ind) => (show(Tensor(name,ind)),empty)
-        case Sum(res, ind, rhs) =>  {
-            val sub = flatten(rhs)
-            ("Sum(" <> ind <> "," <+> sub._1 <> ")", sub._2)
-        }
+        case Sum(res, ind, rhs) => flatten(rhs)
         case Mul(res, lhs, rhs) => {
             //println("entering mul")
             //println(lhs)
@@ -173,7 +170,7 @@ object Flat extends PrettyPrinter {
         }
         case Sum(res, ind, rhs) =>  {
             val meh = flatten(Sum(res, ind, rhs))
-            meh._2 <> "\t" <> show(res) <+> "=" <+> meh._1
+            meh._2 <> "\t" <> show(res) <+> "+=" <+> meh._1
         }
     }
 
