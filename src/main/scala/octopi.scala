@@ -263,6 +263,7 @@ trait Evaluator {
 }
 */
 
+// TODO: This main function is probably too long
 // object OCTOPI extends SyntaxAnalyser with Evaluator {
 object OCTOPI extends SyntaxAnalyser {
 
@@ -274,6 +275,7 @@ object OCTOPI extends SyntaxAnalyser {
         import java.io.FileReader
         import java.io.PrintWriter
         import java.io.File
+        import scala.sys.process._
 
         val reader = new FileReader(args(0))
 
@@ -314,7 +316,8 @@ object OCTOPI extends SyntaxAnalyser {
 
                     val vars = tensorTemps(renamed)
                     val z = new File(dir_name + base_name + "_" + i + ".m")
-                    val wr = new PrintWriter(dir_name + base_name + "_" + i + ".oct")
+                    val versionName = dir_name + base_name + "_" + i + ".oct"
+                    val wr = new PrintWriter(versionName)
                     wr.println(base_name)
                     wr.println("access: linearize")
                     wr.println("define:")
@@ -328,6 +331,9 @@ object OCTOPI extends SyntaxAnalyser {
                     wr.println("operations:")
                     wr.println(Flat.pretty(renamed))
                     wr.close()
+
+                    val cmd = "tcr " + versionName + " CXX=\"pgc++\" CFLAGS=\"-fast\""
+                    cmd.!
 
                     // dot file
                     /*
