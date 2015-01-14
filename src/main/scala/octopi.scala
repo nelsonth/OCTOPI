@@ -314,7 +314,7 @@ object OCTOPI extends SyntaxAnalyser {
 
                     val vars = tensorTemps(renamed)
                     val z = new File(dir_name + base_name + "_" + i + ".m")
-                    val wr = new PrintWriter(dir_name + base_name + "_" + i + ".m")
+                    val wr = new PrintWriter(dir_name + base_name + "_" + i + ".oct")
                     wr.println(base_name)
                     wr.println("access: linearize")
                     wr.println("define:")
