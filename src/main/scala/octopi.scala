@@ -294,6 +294,7 @@ object OCTOPI extends SyntaxAnalyser {
         } else {
             println("Directory already exists, overwriting files")
         }
+        ("cp cudaize.lua " + dir_name).!
 
         parser_result match {
             case Success(program,i) => {
@@ -332,8 +333,7 @@ object OCTOPI extends SyntaxAnalyser {
                     wr.println(Flat.pretty(renamed))
                     wr.close()
 
-                    val cmd = "tcr " + versionName + " CXX=\"pgc++\" CFLAGS=\"-fast\""
-                    cmd.!
+                    ("tcr " + versionName + " CXX=\"pgc++\" CFLAGS=\"-fast\"").!
 
                     // dot file
                     /*
