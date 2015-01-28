@@ -333,8 +333,8 @@ object OCTOPI extends SyntaxAnalyser {
                     wr.println(Flat.pretty(renamed))
                     wr.close()
 
-                    ("tcr " + versionName + " CXX=\"pgc++\" CFLAGS=\"-fast\" -search=Mlsearch -s_runs=100").!
-                    ("orcc " + versionName).!
+                    // ("tcr " + versionName + " CXX=\"pgc++\" CFLAGS=\"-fast\" -search=Mlsearch -s_runs=100").!
+                    // ("orcc " + versionName).!
 
                     // dot file
                     /*
