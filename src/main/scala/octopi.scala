@@ -156,7 +156,7 @@ object Flat extends PrettyPrinter {
             val maybeR = maybeAssign(rhs, subr._1)
             //println(super.pretty(maybeL._2))
             //println(super.pretty(maybeR._2))
-            ("(" <> maybeL._1 <> "*" <> maybeR._1 <> ")", subl._2 <> subr._2 <> maybeL._2 <> maybeR._2)
+            (maybeL._1 <> "*" <> maybeR._1, subl._2 <> subr._2 <> maybeL._2 <> maybeR._2)
         }
     }
 
